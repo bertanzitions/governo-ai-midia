@@ -2,6 +2,10 @@
 
 job.json: {"acao": "publicar" | "verificar", "legenda": "...", "alts": [...], "imagens": ["01.jpg", ...], "story": "story.jpg" (opcional)}
 As imagens já estão neste repositório público; a Meta baixa pelo raw.githubusercontent.com (fixado no commit do push).
+
+Também publica os posts preparados em fila/<post>/ (job.json + imagens) quando existe fila/<post>/publicar, o arquivo
+que o botão "Publicar" da página de revisão pede para o Lucas criar no GitHub. Resultado em resultados/fila-<post>.json;
+um post que já tem resultado ok nunca é publicado de novo.
 O token vem do segredo IG_TOKEN e nunca é impresso.
 """
 import datetime as dt, glob, json, os, shutil, time, urllib.error, urllib.parse, urllib.request
@@ -57,13 +61,13 @@ def dias_token():
         return None
 
 
-def publicar(lote, job):
+def publicar(lote, job, pasta="pub"):
     me = graph("GET", "me", fields="user_id,username")
     uid = me.get("user_id") or me.get("id")
     if job.get("acao") == "verificar":
         lim = graph("GET", f"{uid}/content_publishing_limit", fields="quota_usage,config")
         return {"ok": True, "conta": me.get("username"), "limite": lim.get("data")}
-    base = f"https://raw.githubusercontent.com/{REPO}/{SHA}/pub/{lote}"
+    base = f"https://raw.githubusercontent.com/{REPO}/{SHA}/{pasta}/{lote}"
     if job.get("acao") == "story":
         r = publicar_story(uid, base, job["story"])
         return {"ok": "story_id" in r, **r, **({"erro": r["story_erro"]} if "story_erro" in r else {}), "conta": me.get("username")}
@@ -97,6 +101,40 @@ def publicar_story(uid, base, arquivo):
 
 
 os.makedirs("resultados", exist_ok=True)
+
+
+def gravar(nome, res):
+    res.update({"em": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"), "dias_para_vencer_token": dias_token()})
+    json.dump(res, open(f"resultados/{nome}.json", "w"), ensure_ascii=False, indent=1)
+    print(nome, "ok" if res["ok"] else "erro")
+
+
+# Posts preparados que o Lucas mandou publicar pela página (fila/<post>/publicar).
+for gatilho in sorted(glob.glob("fila/*/publicar")):
+    post = gatilho.split("/")[1]
+    nome = f"fila-{post}"
+    anterior = json.load(open(f"resultados/{nome}.json")) if os.path.exists(f"resultados/{nome}.json") else {}
+    if anterior.get("ok"):
+        os.remove(gatilho)  # já publicado: um segundo clique não publica de novo
+        continue
+    if not os.path.exists(f"fila/{post}/job.json"):
+        res = {"ok": False, "erro": "Este post ainda não foi preparado para publicação (aguarde a próxima execução da esteira e clique de novo)."}
+        os.remove(gatilho)
+    else:
+        job = json.load(open(f"fila/{post}/job.json"))
+        try:
+            res = publicar(post, job, pasta="fila")
+        except Erro as e:
+            res = {"ok": False, "erro": str(e)}
+        except Exception as e:
+            res = {"ok": False, "erro": f"Falha inesperada: {e}"}
+        res.update({"post": post, "assets": job.get("assets")})
+        if res["ok"]:
+            shutil.rmtree(f"fila/{post}", ignore_errors=True)
+        else:
+            os.remove(gatilho)  # mantém o post preparado para tentar de novo
+    gravar(nome, res)
+
 for arq in sorted(glob.glob("pub/*/job.json")):
     lote = arq.split("/")[1]
     if os.path.exists(f"resultados/{lote}.json"):
@@ -108,7 +146,6 @@ for arq in sorted(glob.glob("pub/*/job.json")):
         res = {"ok": False, "erro": str(e)}
     except Exception as e:
         res = {"ok": False, "erro": f"Falha inesperada: {e}"}
-    res.update({"lote": lote, "em": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"), "dias_para_vencer_token": dias_token()})
-    json.dump(res, open(f"resultados/{lote}.json", "w"), ensure_ascii=False, indent=1)
-    print(lote, "ok" if res["ok"] else "erro")
+    res["lote"] = lote
+    gravar(lote, res)
     shutil.rmtree(f"pub/{lote}", ignore_errors=True)  # as imagens só precisam ficar no ar durante a publicação

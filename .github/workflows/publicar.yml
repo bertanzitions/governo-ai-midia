@@ -1,10 +1,13 @@
 name: publicar
-# Disparado quando a esteira do governo.ai envia um pedido (pub/<lote>/job.json).
-# Publica no Instagram com o segredo IG_TOKEN e grava o resultado em resultados/<lote>.json.
+# Disparado de dois jeitos:
+# - pub/<lote>/job.json: pedido enviado pela esteira numa conversa com o Lucas;
+# - fila/<post>/publicar: o Lucas clicou em "Publicar" na página de revisão e confirmou o commit no GitHub.
+#   O post já estava preparado em fila/<post>/ (imagens revisadas + job.json) pela esteira.
+# Publica no Instagram com o segredo IG_TOKEN e grava o resultado em resultados/.
 on:
   push:
     branches: [main]
-    paths: ["pub/**/job.json"]
+    paths: ["pub/**/job.json", "fila/**/publicar"]
 permissions:
   contents: write
 concurrency:
