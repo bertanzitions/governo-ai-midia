@@ -1,0 +1,32 @@
+name: publicar
+# Disparado quando a esteira do governo.ai envia um pedido (pub/<lote>/job.json).
+# Publica no Instagram com o segredo IG_TOKEN e grava o resultado em resultados/<lote>.json.
+on:
+  push:
+    branches: [main]
+    paths: ["pub/**/job.json"]
+permissions:
+  contents: write
+concurrency:
+  group: publicar
+  cancel-in-progress: false
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publicar pedidos pendentes
+        env:
+          IG_TOKEN: ${{ secrets.IG_TOKEN }}
+          IG_TOKEN_GERADO_EM: ${{ vars.IG_TOKEN_GERADO_EM }}
+          IG_LOCATION_ID: ${{ vars.IG_LOCATION_ID }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: python3 publicar.py
+      - name: Gravar resultado e limpar imagens
+        run: |
+          git config user.name "governo.ai esteira"
+          git config user.email "esteira@governo.ai"
+          git add -A
+          git diff --cached --quiet || git commit -m "resultado da publicação"
+          git push
