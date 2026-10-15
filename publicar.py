@@ -1,6 +1,6 @@
 """Roda no GitHub Actions. Para cada pub/<lote>/job.json sem resultado: publica no Instagram e grava resultados/<lote>.json.
 
-job.json: {"acao": "publicar" | "verificar", "legenda": "...", "alts": [...], "imagens": ["01.jpg", ...]}
+job.json: {"acao": "publicar" | "verificar", "legenda": "...", "alts": [...], "imagens": ["01.jpg", ...], "story": "story.jpg" (opcional)}
 As imagens já estão neste repositório público; a Meta baixa pelo raw.githubusercontent.com (fixado no commit do push).
 O token vem do segredo IG_TOKEN e nunca é impresso.
 """
@@ -73,7 +73,15 @@ def publicar(lote, job):
     esperar(car["id"])
     pub = graph("POST", f"{uid}/media_publish", creation_id=car["id"])
     info = graph("GET", pub["id"], fields="permalink")
-    return {"ok": True, "id": pub["id"], "permalink": info.get("permalink"), "conta": me.get("username")}
+    res = {"ok": True, "id": pub["id"], "permalink": info.get("permalink"), "conta": me.get("username")}
+    if job.get("story"):  # story publicado logo depois do carrossel; uma falha aqui não desfaz o post
+        try:
+            st = graph("POST", f"{uid}/media", image_url=f"{base}/{job['story']}", media_type="STORIES")
+            esperar(st["id"])
+            res["story_id"] = graph("POST", f"{uid}/media_publish", creation_id=st["id"])["id"]
+        except Erro as e:
+            res["story_erro"] = str(e)
+    return res
 
 
 os.makedirs("resultados", exist_ok=True)
