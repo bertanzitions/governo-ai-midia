@@ -1,0 +1,18 @@
+{
+ "ok": false,
+ "erro": "Instagram recusou media_publish: Application request limit reached",
+ "post": "2026-10-15-camara-mpv-1370-2026-simbolica",
+ "assets": [
+  "0c8e9753902d646499cbe9d5cb3cf60b",
+  "a2afeb61117eb7499a6a842843641b8e",
+  "8cc0badb5cce564eba3f9c860bcb99bc",
+  "e397af9e2d1f97c701aa6061d67b230b",
+  "2a78672d5b98d62363947a2f4b839719",
+  "b78cb6e79c030828479196356773731d",
+  "e25eae28a402a3bc01266d6a08b53c88",
+  "ae9dbd8ab720c0bda92184e8cb52a622",
+  "7b5d313b89739f19d7eab592814698f5"
+ ],
+ "em": "2026-10-15T20:46:06+00:00",
+ "dias_para_vencer_token": 60
+}

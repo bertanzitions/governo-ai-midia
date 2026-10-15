@@ -1,0 +1,18 @@
+{
+ "ok": false,
+ "erro": "Instagram recusou media_publish: Application request limit reached",
+ "post": "2026-10-15-camara-pl-1123-2025-simbolica",
+ "assets": [
+  "27eb3dbb1483430b316f4edb12b44bdc",
+  "718ccb6ce98699cf756e526fab1a7e09",
+  "2f692734bab14a1b945b35d20173c4a0",
+  "38f3500a35a9c5cc8187f33a89eb087c",
+  "5e45877fcb01fc2742e33ab9ae616b40",
+  "6db09b0da74f9ae0ee65774c2b0cd467",
+  "158fe1c83751935247616474a4e21934",
+  "637603d5acaebd5a6eda679b46526dd5",
+  "e61487004a8e1eaf81b9ce584167b05f"
+ ],
+ "em": "2026-10-15T20:46:51+00:00",
+ "dias_para_vencer_token": 60
+}
