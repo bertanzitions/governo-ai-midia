@@ -1,0 +1,16 @@
+{
+ "ok": true,
+ "conta": "governo.ai",
+ "limite": [
+  {
+   "quota_usage": 0,
+   "config": {
+    "quota_total": 100,
+    "quota_duration": 86400
+   }
+  }
+ ],
+ "lote": "verificar-1792078448",
+ "em": "2026-10-15T15:34:19+00:00",
+ "dias_para_vencer_token": 60
+}
