@@ -64,6 +64,9 @@ def publicar(lote, job):
         lim = graph("GET", f"{uid}/content_publishing_limit", fields="quota_usage,config")
         return {"ok": True, "conta": me.get("username"), "limite": lim.get("data")}
     base = f"https://raw.githubusercontent.com/{REPO}/{SHA}/pub/{lote}"
+    if job.get("acao") == "story":
+        r = publicar_story(uid, base, job["story"])
+        return {"ok": "story_id" in r, **r, **({"erro": r["story_erro"]} if "story_erro" in r else {}), "conta": me.get("username")}
     filhos = [graph("POST", f"{uid}/media", image_url=f"{base}/{img}", is_carousel_item="true", alt_text=job["alts"][i])["id"]
               for i, img in enumerate(job["imagens"])]
     for c in filhos:
@@ -75,13 +78,22 @@ def publicar(lote, job):
     info = graph("GET", pub["id"], fields="permalink")
     res = {"ok": True, "id": pub["id"], "permalink": info.get("permalink"), "conta": me.get("username")}
     if job.get("story"):  # story publicado logo depois do carrossel; uma falha aqui não desfaz o post
-        try:
-            st = graph("POST", f"{uid}/media", image_url=f"{base}/{job['story']}", media_type="STORIES")
-            esperar(st["id"])
-            res["story_id"] = graph("POST", f"{uid}/media_publish", creation_id=st["id"])["id"]
-        except Erro as e:
-            res["story_erro"] = str(e)
+        res.update(publicar_story(uid, base, job["story"]))
     return res
+
+
+def publicar_story(uid, base, arquivo):
+    ultimo = None
+    for tentativa in range(3):  # a Meta às vezes responde "resource does not exist" logo após outro publish
+        try:
+            time.sleep(10 * (tentativa + 1))
+            st = graph("POST", f"{uid}/media", image_url=f"{base}/{arquivo}", media_type="STORIES")
+            esperar(st["id"])
+            time.sleep(5)
+            return {"story_id": graph("POST", f"{uid}/media_publish", creation_id=st["id"])["id"]}
+        except Erro as e:
+            ultimo = str(e)
+    return {"story_erro": ultimo}
 
 
 os.makedirs("resultados", exist_ok=True)
