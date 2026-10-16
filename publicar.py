@@ -42,15 +42,38 @@ def graph(metodo, caminho, **params):
 
 
 def esperar(cid, limite=240):
+    # Consulta poucas vezes: cada consulta gasta a cota de pedidos por hora do app ("Application request limit").
     t0 = time.time()
+    time.sleep(8)
     while time.time() - t0 < limite:
         st = graph("GET", cid, fields="status_code").get("status_code")
-        if st == "FINISHED":
+        if st in ("FINISHED", "PUBLISHED"):
             return
         if st in ("ERROR", "EXPIRED"):
             raise Erro(f"O Instagram não conseguiu processar a mídia ({st}).")
-        time.sleep(5)
+        time.sleep(20)
     raise Erro("O Instagram demorou demais para processar as imagens.")
+
+
+def publicar_container(uid, cid, legenda=None):
+    """media_publish; se o Instagram responder erro mas tiver publicado (acontece com o limite de pedidos),
+    confirma pelo status do container e acha a publicação na lista do perfil."""
+    try:
+        return graph("POST", f"{uid}/media_publish", creation_id=cid)["id"]
+    except Erro as e:
+        time.sleep(30)
+        try:
+            st = graph("GET", cid, fields="status_code").get("status_code")
+        except Erro:
+            st = None
+        if st != "PUBLISHED":
+            raise e
+        if legenda is None:
+            return "publicado-sem-id"
+        for m in graph("GET", f"{uid}/media", fields="id,caption", limit=6).get("data", []):
+            if (m.get("caption") or "").strip()[:80] == legenda.strip()[:80]:
+                return m["id"]
+        return "publicado-sem-id"
 
 
 def dias_token():
@@ -64,6 +87,13 @@ def dias_token():
 def publicar(lote, job, pasta="pub"):
     me = graph("GET", "me", fields="user_id,username")
     uid = me.get("user_id") or me.get("id")
+    if job.get("acao") == "recentes":  # o que está no perfil agora (para conferir publicações)
+        ms = graph("GET", f"{uid}/media", fields="id,caption,media_type,media_product_type,timestamp,permalink", limit=12).get("data", [])
+        try:
+            sts = graph("GET", f"{uid}/stories", fields="id,timestamp,permalink").get("data", [])
+        except Erro as e:
+            sts = [{"erro": str(e)}]
+        return {"ok": True, "conta": me.get("username"), "midia": [dict(m, caption=(m.get("caption") or "")[:90]) for m in ms], "stories": sts}
     if job.get("acao") == "verificar":
         lim = graph("GET", f"{uid}/content_publishing_limit", fields="quota_usage,config")
         return {"ok": True, "conta": me.get("username"), "limite": lim.get("data")}
@@ -72,9 +102,9 @@ def publicar(lote, job, pasta="pub"):
         extra = {"cover_url": f"{base}/{job['capa']}"} if job.get("capa") else {}
         c = graph("POST", f"{uid}/media", media_type="REELS", video_url=f"{base}/{job['video']}", caption=job["legenda"], share_to_feed="true", **extra)
         esperar(c["id"], limite=900)
-        pub = graph("POST", f"{uid}/media_publish", creation_id=c["id"])
-        info = graph("GET", pub["id"], fields="permalink")
-        return {"ok": True, "id": pub["id"], "permalink": info.get("permalink"), "conta": me.get("username")}
+        pid = publicar_container(uid, c["id"], job["legenda"])
+        info = graph("GET", pid, fields="permalink") if pid != "publicado-sem-id" else {}
+        return {"ok": True, "id": pid, "permalink": info.get("permalink"), "conta": me.get("username")}
     if job.get("acao") == "story":
         r = publicar_story(uid, base, job["story"])
         return {"ok": "story_id" in r, **r, **({"erro": r["story_erro"]} if "story_erro" in r else {}), "conta": me.get("username")}
@@ -85,9 +115,9 @@ def publicar(lote, job, pasta="pub"):
     extra = {"location_id": os.environ["IG_LOCATION_ID"]} if os.environ.get("IG_LOCATION_ID") else {}
     car = graph("POST", f"{uid}/media", media_type="CAROUSEL", children=",".join(filhos), caption=job["legenda"], **extra)
     esperar(car["id"])
-    pub = graph("POST", f"{uid}/media_publish", creation_id=car["id"])
-    info = graph("GET", pub["id"], fields="permalink")
-    res = {"ok": True, "id": pub["id"], "permalink": info.get("permalink"), "conta": me.get("username")}
+    pid = publicar_container(uid, car["id"], job["legenda"])
+    info = graph("GET", pid, fields="permalink") if pid != "publicado-sem-id" else {}
+    res = {"ok": True, "id": pid, "permalink": info.get("permalink"), "conta": me.get("username")}
     if job.get("story"):  # story publicado logo depois do carrossel; uma falha aqui não desfaz o post
         res.update(publicar_story(uid, base, job["story"]))
     return res
@@ -101,7 +131,7 @@ def publicar_story(uid, base, arquivo):
             st = graph("POST", f"{uid}/media", image_url=f"{base}/{arquivo}", media_type="STORIES")
             esperar(st["id"])
             time.sleep(5)
-            return {"story_id": graph("POST", f"{uid}/media_publish", creation_id=st["id"])["id"]}
+            return {"story_id": publicar_container(uid, st["id"])}
         except Erro as e:
             ultimo = str(e)
     return {"story_erro": ultimo}
