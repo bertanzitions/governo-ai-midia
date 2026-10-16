@@ -1,6 +1,6 @@
 """Roda no GitHub Actions. Para cada pub/<lote>/job.json sem resultado: publica no Instagram e grava resultados/<lote>.json.
 
-job.json: {"acao": "publicar" | "verificar", "legenda": "...", "alts": [...], "imagens": ["01.jpg", ...], "story": "story.jpg" (opcional)}
+job.json: {"acao": "publicar" | "verificar" | "story" | "reel" (com "video": "reel.mp4", "capa": "capa.jpg"), "legenda": "...", "alts": [...], "imagens": ["01.jpg", ...], "story": "story.jpg" (opcional)}
 As imagens já estão neste repositório público; a Meta baixa pelo raw.githubusercontent.com (fixado no commit do push).
 
 Também publica os posts preparados em fila/<post>/ (job.json + imagens) quando existe fila/<post>/publicar, o arquivo
@@ -68,6 +68,13 @@ def publicar(lote, job, pasta="pub"):
         lim = graph("GET", f"{uid}/content_publishing_limit", fields="quota_usage,config")
         return {"ok": True, "conta": me.get("username"), "limite": lim.get("data")}
     base = f"https://raw.githubusercontent.com/{REPO}/{SHA}/{pasta}/{lote}"
+    if job.get("acao") == "reel":
+        extra = {"cover_url": f"{base}/{job['capa']}"} if job.get("capa") else {}
+        c = graph("POST", f"{uid}/media", media_type="REELS", video_url=f"{base}/{job['video']}", caption=job["legenda"], share_to_feed="true", **extra)
+        esperar(c["id"], limite=900)
+        pub = graph("POST", f"{uid}/media_publish", creation_id=c["id"])
+        info = graph("GET", pub["id"], fields="permalink")
+        return {"ok": True, "id": pub["id"], "permalink": info.get("permalink"), "conta": me.get("username")}
     if job.get("acao") == "story":
         r = publicar_story(uid, base, job["story"])
         return {"ok": "story_id" in r, **r, **({"erro": r["story_erro"]} if "story_erro" in r else {}), "conta": me.get("username")}
